@@ -1,6 +1,6 @@
 #![allow(unused_imports)]
 #![allow(unused_variables)]
-use bls12_381::{Bls12, Scalar};
+use bls12_381::{Bls12, Scalar, G1Affine, G2Affine};
 // For randomness (during paramgen and proof generation)
 use rand::{thread_rng, Rng};
 use ff::PrimeField as Fr;
@@ -133,7 +133,7 @@ fn test_cube_proof(){
     // println!("ic0{:?}", params.vk.ic[0].to_compressed());
     // println!("ic1{:?}", params.vk.ic[1].to_compressed());
 
-    println!(r#"{{"alpha_1":{:?},"beta_1":{:?},"beta_2":{:?},"gamma_2":{:?},"delta_1":{:?},"delta_2":{:?},"ic":[{:?},{:?}]}}"#, params.vk.alpha_g1.to_compressed(), params.vk.beta_g1.to_compressed(), params.vk.beta_g2.to_compressed(), params.vk.gamma_g2.to_compressed(), params.vk.delta_g1.to_compressed(), params.vk.delta_g2.to_compressed(), params.vk.ic[0].to_compressed(), params.vk.ic[1].to_compressed());
+    println!(r#"{{"alpha_1":{:?},"beta_1":{:?},"beta_2":{:?},"gamma_2":{:?},"delta_1":{:?},"delta_2":{:?},"ic":[{:?},{:?}]}}"#, params.vk.alpha_g1.to_uncompressed(), params.vk.beta_g1.to_uncompressed(), params.vk.beta_g2.to_uncompressed(), params.vk.gamma_g2.to_uncompressed(), params.vk.delta_g1.to_uncompressed(), params.vk.delta_g2.to_uncompressed(), params.vk.ic[0].to_uncompressed(), params.vk.ic[1].to_uncompressed());
 
     println!("Creating proofs...");
 
@@ -148,17 +148,22 @@ fn test_cube_proof(){
     let mut proof_vec = vec![];
     proof.write(&mut proof_vec).unwrap();
 
-    let proof_a_affine = proof.a.to_compressed();
+    let proof_a_affine = proof.a.to_uncompressed();
     // println!("proofaaffine: {:?}", proof_a_affine);
 
-    let proof_b_affine = proof.b.to_compressed();
+    let proof_b_affine = proof.b.to_uncompressed();
     // println!("proofabffine: {:?}", proof_b_affine);
 
-    let proof_c_affine = proof.c.to_compressed();
+    let proof_c_affine = proof.c.to_uncompressed();
     // println!("proofacffine: {:?}", proof_c_affine);
 
     println!(r#"{{"pi_a":{:?},"pi_b":{:?},"pi_c":{:?}}}"#, proof_a_affine, proof_b_affine, proof_c_affine);
 
+    // println!("proof: {:?}", proof);
+
+    let proof_a_affine = G1Affine::from_uncompressed(&proof_a_affine).unwrap();
+
+    println!("proof_a_affine: {:?}", proof_a_affine);
 
     assert!(verify_proof(
         &pvk,
