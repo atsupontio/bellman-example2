@@ -133,7 +133,7 @@ fn test_cube_proof(){
     // println!("ic0{:?}", params.vk.ic[0].to_compressed());
     // println!("ic1{:?}", params.vk.ic[1].to_compressed());
 
-    println!(r#"{{"alpha_1":{:?},"beta_2":{:?},"gamma_2":{:?},"delta_2":{:?},"ic":[{:?},{:?}]}}"#, params.vk.alpha_g1.to_compressed(), params.vk.beta_g2.to_compressed(), params.vk.gamma_g2.to_compressed(), params.vk.delta_g2.to_compressed(), params.vk.ic[0].to_compressed(), params.vk.ic[1].to_compressed());
+    println!(r#"{{"alpha_1":{:?},"beta_1":{:?},"beta_2":{:?},"gamma_2":{:?},"delta_1":{:?},"delta_2":{:?},"ic":[{:?},{:?}]}}"#, params.vk.alpha_g1.to_compressed(), params.vk.beta_g1.to_compressed(), params.vk.beta_g2.to_compressed(), params.vk.gamma_g2.to_compressed(), params.vk.delta_g1.to_compressed(), params.vk.delta_g2.to_compressed(), params.vk.ic[0].to_compressed(), params.vk.ic[1].to_compressed());
 
     println!("Creating proofs...");
 
