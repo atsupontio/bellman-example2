@@ -49,7 +49,7 @@ pub struct EddsaSignatureDemo<E: JubjubEngine> {
 //     }
 // }
 
-impl <E: Engine + JubjubEngine> Circuit<E> for EddsaSignatureDemo<E> {
+impl <E: JubjubEngine> Circuit<E> for EddsaSignatureDemo<E> {
     fn synthesize<CS: ConstraintSystem<E>>(
         self,
         cs: &mut CS
