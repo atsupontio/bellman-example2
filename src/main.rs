@@ -2,11 +2,13 @@
 #![allow(unused_variables)]
 use rand::thread_rng;
 use bellman::{Circuit, ConstraintSystem, SynthesisError};
-use bls12_381::{Bls12, Scalar};
-use ff::PrimeField as Fr;
+use bellman::pairing::bls12_381::{Bls12};
+use bellman::pairing::ff::PrimeField as Fr;
 
 mod cube;
 // mod mimc;
+// mod redjubjub_signature;
+// mod redjubjub;
 
 fn main() {
     use bellman::groth16::{
@@ -20,7 +22,7 @@ fn main() {
 
     // Create parameters for our circuit
     let params = {
-        let c = cube::CubeDemo::<Scalar> {
+        let c = cube::CubeDemo::<Bls12> {
             x: None
         };
 

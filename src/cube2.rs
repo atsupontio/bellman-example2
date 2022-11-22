@@ -1,19 +1,15 @@
 #![allow(unused_imports)]
 #![allow(unused_variables)]
-use bellman::pairing::bls12_381::{Bls12, G1Affine, G2Affine};
+use bls12_381::{Bls12, Scalar, G1Affine, G2Affine};
 // For randomness (during paramgen and proof generation)
 use rand::{thread_rng, Rng};
-use bellman::pairing::ff::PrimeField as Fr;
-
-use bellman::pairing::ff::ScalarEngine;
+use ff::PrimeField as Fr;
 
 use bellman::{
     Circuit,
     ConstraintSystem,
     SynthesisError
 };
-
-use bellman::pairing::Engine;
 
 use bellman::groth16::{
     Proof,
@@ -26,11 +22,11 @@ use bellman::groth16::{
 // proving that I know x such that x^3 + x + 5 == 35
 // Generalized: x^3 + x + 5 == out
 #[allow(clippy::upper_case_acronyms)]
-pub struct CubeDemo<E: Engine> {
+pub struct CubeDemo<E: Fr> {
     pub x: Option<E>,
 }
 
-impl <E: Engine> Circuit<E> for CubeDemo<E> {
+impl <E: Fr> Circuit<E> for CubeDemo<E> {
     fn synthesize<CS: ConstraintSystem<E>>(
         self,
         cs: &mut CS
@@ -48,6 +44,8 @@ impl <E: Engine> Circuit<E> for CubeDemo<E> {
         let x = cs.alloc(|| "x", || {
             x_val.ok_or(SynthesisError::AssignmentMissing)
         })?;
+
+        let x = NoteValue::new(cs.namespace(|| "vpub_new"), self.vpub_new)?;
 
         // Allocate: x * x = tmp_1
         let tmp_1_val = x_val.map(|e| {
