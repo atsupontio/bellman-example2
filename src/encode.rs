@@ -112,7 +112,7 @@ pub fn encode_uncompressed() -> Result<(), io::Error> {
     file_vkey_g.write(res_vg.as_bytes())?;
     let mut file_vkey_d1 = File::create("./file/vkey_d1.txt").unwrap();
     file_vkey_d1.write(res_vd1.as_bytes())?;
-    let mut file_vkey_d2 = File::create("./filev/key_d2.txt").unwrap();
+    let mut file_vkey_d2 = File::create("./file/vkey_d2.txt").unwrap();
     file_vkey_d2.write(res_vd2.as_bytes())?;
     let mut file_vkey_ic_1 = File::create("./file/vkey_ic_1.txt").unwrap();
     file_vkey_ic_1.write(res_vic1.as_bytes())?;
