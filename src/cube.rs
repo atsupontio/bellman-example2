@@ -135,7 +135,7 @@ fn test_cube_proof(){
     // println!("ic0{:?}", params.vk.ic[0].to_compressed());
     // println!("ic1{:?}", params.vk.ic[1].to_compressed());
 
-    println!(r#"{{"alpha_1":{:?},"beta_1":{:?},"beta_2":{:?},"gamma_2":{:?},"delta_1":{:?},"delta_2":{:?},"ic":[{:?},{:?}]}}"#, params.vk.alpha_g1.to_uncompressed(), params.vk.beta_g1.to_uncompressed(), params.vk.beta_g2.to_uncompressed(), params.vk.gamma_g2.to_uncompressed(), params.vk.delta_g1.to_uncompressed(), params.vk.delta_g2.to_uncompressed(), params.vk.ic[0].to_uncompressed(), params.vk.ic[1].to_uncompressed());
+    // println!(r#"{{"alpha_1":{:?},"beta_1":{:?},"beta_2":{:?},"gamma_2":{:?},"delta_1":{:?},"delta_2":{:?},"ic":[{:?},{:?}]}}"#, params.vk.alpha_g1.to_uncompressed(), params.vk.beta_g1.to_uncompressed(), params.vk.beta_g2.to_uncompressed(), params.vk.gamma_g2.to_uncompressed(), params.vk.delta_g1.to_uncompressed(), params.vk.delta_g2.to_uncompressed(), params.vk.ic[0].to_uncompressed(), params.vk.ic[1].to_uncompressed());
     
     println!("Creating proofs...");
 
@@ -147,9 +147,6 @@ fn test_cube_proof(){
     // Create a groth16 proof with our parameters.
     let proof = create_random_proof(c, &params, &mut rng).unwrap();
 
-    let mut proof_vec = vec![];
-    proof.write(&mut proof_vec).unwrap();
-
     let proof_a_affine = proof.a.to_uncompressed();
     // println!("proofaaffine: {:?}", proof_a_affine);
 
@@ -159,7 +156,7 @@ fn test_cube_proof(){
     let proof_c_affine = proof.c.to_uncompressed();
     // println!("proofacffine: {:?}", proof_c_affine);
 
-    println!(r#"{{"pi_a":{:?},"pi_b":{:?},"pi_c":{:?}}}"#, proof_a_affine, proof_b_affine, proof_c_affine);
+    // println!(r#"{{"pi_a":{:?},"pi_b":{:?},"pi_c":{:?}}}"#, proof_a_affine, proof_b_affine, proof_c_affine);
     let res_proof = format!(r#"{{"pi_a":{:?},"pi_b":{:?},"pi_c":{:?}}}"#, proof_a_affine, proof_b_affine, proof_c_affine);
     let res_vkey = format!(r#"{{"alpha_1":{:?},"beta_1":{:?},"beta_2":{:?},"gamma_2":{:?},"delta_1":{:?},"delta_2":{:?},"ic":[{:?},{:?}]}}"#, params.vk.alpha_g1.to_uncompressed(), params.vk.beta_g1.to_uncompressed(), params.vk.beta_g2.to_uncompressed(), params.vk.gamma_g2.to_uncompressed(), params.vk.delta_g1.to_uncompressed(), params.vk.delta_g2.to_uncompressed(), params.vk.ic[0].to_uncompressed(), params.vk.ic[1].to_uncompressed());
     encode::create_uncompressed_file(res_proof, res_vkey);
@@ -170,4 +167,61 @@ fn test_cube_proof(){
         &proof,
         &[Fr::from_str_vartime("35").unwrap()]
     ).is_ok());
+}
+
+#[test]
+fn test_create_multi_proofs(){
+
+    const BATCH_NUMBER: u32 = 3;
+
+    // This may not be cryptographically safe, use
+    // `OsRng` (for example) in production software.
+    let mut rng = thread_rng();
+
+    println!("Creating parameters...");
+
+    // Create parameters for our circuit
+    let params = {
+        let c = CubeDemo::<Scalar> {
+            x: None
+        };
+
+        generate_random_parameters::<Bls12, _, _>(c, &mut rng).unwrap()
+    };
+
+    // Prepare the verification key (for proof verification)
+    let pvk = prepare_verifying_key(&params.vk);
+
+    println!("Creating proofs...");
+
+    for i in 1..=BATCH_NUMBER {
+        // Create an instance of circuit
+        let c = CubeDemo::<Scalar> {
+            x: Fr::from_str_vartime("3")
+        };
+
+        // Create a groth16 proof with our parameters.
+        let proof = create_random_proof(c, &params, &mut rng).unwrap();
+
+        let proof_a_affine = proof.a.to_uncompressed();
+        // println!("proofaaffine: {:?}", proof_a_affine);
+
+        let proof_b_affine = proof.b.to_uncompressed();
+        // println!("proofabffine: {:?}", proof_b_affine);
+
+        let proof_c_affine = proof.c.to_uncompressed();
+        // println!("proofacffine: {:?}", proof_c_affine);
+
+        // println!(r#"{{"pi_a":{:?},"pi_b":{:?},"pi_c":{:?}}}"#, proof_a_affine, proof_b_affine, proof_c_affine);
+        let res_proof = format!(r#"{{"pi_a":{:?},"pi_b":{:?},"pi_c":{:?}}}"#, proof_a_affine, proof_b_affine, proof_c_affine);
+        let res_vkey = format!(r#"{{"alpha_1":{:?},"beta_1":{:?},"beta_2":{:?},"gamma_2":{:?},"delta_1":{:?},"delta_2":{:?},"ic":[{:?},{:?}]}}"#, params.vk.alpha_g1.to_uncompressed(), params.vk.beta_g1.to_uncompressed(), params.vk.beta_g2.to_uncompressed(), params.vk.gamma_g2.to_uncompressed(), params.vk.delta_g1.to_uncompressed(), params.vk.delta_g2.to_uncompressed(), params.vk.ic[0].to_uncompressed(), params.vk.ic[1].to_uncompressed());
+        encode::create_multi_uncompressed_files(res_proof, res_vkey, i);
+        encode::encode_multi_uncompressed(i, BATCH_NUMBER);
+
+        assert!(verify_proof(
+            &pvk,
+            &proof,
+            &[Fr::from_str_vartime("35").unwrap()]
+        ).is_ok());
+    }
 }
