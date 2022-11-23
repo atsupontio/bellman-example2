@@ -7,6 +7,7 @@ use ff::PrimeField as Fr;
 
 mod cube;
 // mod mimc;
+mod encode;
 
 fn main() {
     use bellman::groth16::{

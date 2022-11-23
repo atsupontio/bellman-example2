@@ -19,6 +19,8 @@ use bellman::groth16::{
     verify_proof,
 };
 
+use crate::encode;
+
 // proving that I know x such that x^3 + x + 5 == 35
 // Generalized: x^3 + x + 5 == out
 #[allow(clippy::upper_case_acronyms)]
@@ -133,8 +135,8 @@ fn test_cube_proof(){
     // println!("ic0{:?}", params.vk.ic[0].to_compressed());
     // println!("ic1{:?}", params.vk.ic[1].to_compressed());
 
-    println!(r#"{{"alpha_1":{:?},"beta_1":{:?},"beta_2":{:?},"gamma_2":{:?},"delta_1":{:?},"delta_2":{:?},"ic":[{:?},{:?}]}}"#, params.vk.alpha_g1.to_compressed(), params.vk.beta_g1.to_compressed(), params.vk.beta_g2.to_compressed(), params.vk.gamma_g2.to_compressed(), params.vk.delta_g1.to_compressed(), params.vk.delta_g2.to_compressed(), params.vk.ic[0].to_compressed(), params.vk.ic[1].to_compressed());
-
+    println!(r#"{{"alpha_1":{:?},"beta_1":{:?},"beta_2":{:?},"gamma_2":{:?},"delta_1":{:?},"delta_2":{:?},"ic":[{:?},{:?}]}}"#, params.vk.alpha_g1.to_uncompressed(), params.vk.beta_g1.to_uncompressed(), params.vk.beta_g2.to_uncompressed(), params.vk.gamma_g2.to_uncompressed(), params.vk.delta_g1.to_uncompressed(), params.vk.delta_g2.to_uncompressed(), params.vk.ic[0].to_uncompressed(), params.vk.ic[1].to_uncompressed());
+    
     println!("Creating proofs...");
 
     // Create an instance of circuit
@@ -148,17 +150,20 @@ fn test_cube_proof(){
     let mut proof_vec = vec![];
     proof.write(&mut proof_vec).unwrap();
 
-    let proof_a_affine = proof.a.to_compressed();
+    let proof_a_affine = proof.a.to_uncompressed();
     // println!("proofaaffine: {:?}", proof_a_affine);
 
-    let proof_b_affine = proof.b.to_compressed();
+    let proof_b_affine = proof.b.to_uncompressed();
     // println!("proofabffine: {:?}", proof_b_affine);
 
-    let proof_c_affine = proof.c.to_compressed();
+    let proof_c_affine = proof.c.to_uncompressed();
     // println!("proofacffine: {:?}", proof_c_affine);
 
     println!(r#"{{"pi_a":{:?},"pi_b":{:?},"pi_c":{:?}}}"#, proof_a_affine, proof_b_affine, proof_c_affine);
-
+    let res_proof = format!(r#"{{"pi_a":{:?},"pi_b":{:?},"pi_c":{:?}}}"#, proof_a_affine, proof_b_affine, proof_c_affine);
+    let res_vkey = format!(r#"{{"alpha_1":{:?},"beta_1":{:?},"beta_2":{:?},"gamma_2":{:?},"delta_1":{:?},"delta_2":{:?},"ic":[{:?},{:?}]}}"#, params.vk.alpha_g1.to_uncompressed(), params.vk.beta_g1.to_uncompressed(), params.vk.beta_g2.to_uncompressed(), params.vk.gamma_g2.to_uncompressed(), params.vk.delta_g1.to_uncompressed(), params.vk.delta_g2.to_uncompressed(), params.vk.ic[0].to_uncompressed(), params.vk.ic[1].to_uncompressed());
+    encode::create_uncompressed_file(res_proof, res_vkey);
+    encode::encode_uncompressed();
 
     assert!(verify_proof(
         &pvk,
