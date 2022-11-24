@@ -8,6 +8,7 @@ use bellman::pairing::ff::PrimeField as Fr;
 mod cube;
 // mod mimc;
 mod test;
+mod into_affine;
 
 fn main() {
     // use bellman::groth16::{

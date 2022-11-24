@@ -1,23 +1,12 @@
+#![allow(unused_imports)]
+#![allow(unused_variables)]
+use std::clone;
 
-use bellman::pairing::bn256::{Bn256, Fr};
-use bellman::pairing::{Engine, RawEncodable};
+use bellman::pairing::bls12_381::{Bls12};
 // For randomness (during paramgen and proof generation)
-use rand::{thread_rng, Rng, XorShiftRng, SeedableRng};
+use rand::{thread_rng, Rng};
 use bellman::pairing::ff::{PrimeField, ScalarEngine, Field, PrimeFieldRepr};
-use bellman::pairing::CurveAffine;
-
-use sapling_crypto_ce::circuit::boolean::Boolean;
-use sapling_crypto_ce::jubjub::{JubjubEngine, JubjubParams, FixedGenerators};
-
-use sapling_crypto_ce::circuit::{ecc::EdwardsPoint, num::AllocatedNum, baby_eddsa, boolean::AllocatedBit};
-
-use sapling_crypto_ce::circuit::baby_eddsa::EddsaSignature;
-use sapling_crypto_ce::circuit::test::TestConstraintSystem;
-
-use sapling_crypto_ce::alt_babyjubjub::{self, AltJubjubBn256};
-
-use sapling_crypto_ce::eddsa::{PrivateKey, PublicKey, Signature};
-
+use bellman::pairing::{Engine, CurveAffine, EncodedPoint};
 
 use bellman::{
     Circuit,
@@ -33,125 +22,116 @@ use bellman::groth16::{
     verify_proof,
 };
 
-pub struct EddsaSignatureDemo<E: JubjubEngine> {
-    pub private_key: Option<PrivateKey<E>>,
-    pub public_key: Option<PublicKey<E>>,
-    pub msg: Option<Vec<u8>>,
-    pub sig: Option<Signature<E>>,
+// proving that I know x such that x^3 + x + 5 == 35
+// Generalized: x^3 + x + 5 == out
+#[derive(Clone)]
+pub struct CubeDemo<E:Engine> {
+    pub x: Option<E::Fr>,
 }
 
-// impl<E: JubjubEngine> EddsaSignatureDemo<E> {
-//     pub fn new() -> EddsaSignatureDemo<E> {
-//         let mut map = HashMap::new();
-//         map.insert("ONE".into(), NamedObject::Var(TestConstraintSystem::<E>::one()));
-
-//         EddsaSignatureDemo { signature: (), input: (), params: () }
-//     }
-// }
-
-impl <E: JubjubEngine> Circuit<E> for EddsaSignatureDemo<E> {
+impl <E: Engine> Circuit<E> for CubeDemo<E> {
     fn synthesize<CS: ConstraintSystem<E>>(
         self,
         cs: &mut CS
     ) -> Result<(), SynthesisError>
     {
+        // Flattened into quadratic equations (x^3 + x + 5 == 35):
+        // x * x = tmp_1
+        // tmp_1 * x = y
+        // y + x = tmp_2
+        // tmp_2 + 5 = out
+        // Resulting R1CS with w = [one, x, tmp_1, y, tmp_2, out]
 
-        let mut input: Vec<bool> = vec![];
+        // Allocate the first private "auxiliary" variable
+        let x_val = self.x;
+        let x = cs.alloc(|| "x", || {
+            x_val.ok_or(SynthesisError::AssignmentMissing)
+        })?;
 
-        for b in self.msg.unwrap().iter() {  
-            for i in (0..8).into_iter() {
-                if (b & (1 << i)) != 0 {
-                    input.extend(&[true; 1]);
-                } else {
-                    input.extend(&[false; 1]);
-                }
-            }
-        }
-        let input_bools: Vec<Boolean> = input.iter().enumerate().map(|(i, b)| {
-            Boolean::from(
-                AllocatedBit::alloc(cs.namespace(|| format!("input {}", i)), Some(*b)).unwrap()
-            )
-        }).collect();
+        // Allocate: x * x = tmp_1
+        let tmp_1_val = x_val.map(|mut e| {
+            e.square();
+            e
+        });
+        let tmp_1 = cs.alloc(|| "tmp_1", || {
+            tmp_1_val.ok_or(SynthesisError::AssignmentMissing)
+        })?;
+        // Enforce: x * x = tmp_1
+        cs.enforce(
+            || "tmp_1",
+            |lc| lc + x,
+            |lc| lc + x,
+            |lc| lc + tmp_1
+        );
 
-        let mut sigs_bytes = [0u8; 32];
-        self.sig.unwrap().s.into_repr().write_le(& mut sigs_bytes[..]).expect("get LE bytes of signature S");
-        let mut sigs_repr = <Fr as PrimeField>::Repr::from(0);
-        sigs_repr.read_le(&sigs_bytes[..]).expect("interpret S as field element representation");
+        // Allocate: tmp_1 * x = y
+        let x_cubed_val = tmp_1_val.map(|mut e| {
+            e.mul_assign(&x_val.unwrap());
+            e
+        });
+        let x_cubed = cs.alloc(|| "x_cubed", || {
+            x_cubed_val.ok_or(SynthesisError::AssignmentMissing)
+        })?;
+        // Enforce: tmp_1 * x = y
+        cs.enforce(
+            || "x_cubed",
+            |lc| lc + tmp_1,
+            |lc| lc + x,
+            |lc| lc + x_cubed
+        );
 
-        let sigs_converted = <Fr as PrimeField>::from_repr(sigs_repr).unwrap();
+        // Allocating the public "primary" output uses alloc_input
+        let out = cs.alloc_input(|| "out", || {
+            let mut tmp = x_cubed_val.unwrap();
+            tmp.add_assign(&x_val.unwrap());
+            tmp.add_assign(&E::Fr::from_str("5").unwrap());
+            Ok(tmp)
+        })?;
+        // tmp_2 + 5 = out
+        // => (tmp_2 + 5) * 1 = out
+        cs.enforce(
+            || "out",
+            |lc| lc + x_cubed + x + (E::Fr::from_str("5").unwrap(), CS::one()),
+            |lc| lc + CS::one(),
+            |lc| lc + out
+        );
+        // lc is an inner product of all variables with some vector of coefficients
+        // bunch of variables added together with some coefficients
 
-        let s = AllocatedNum::alloc(cs.namespace(|| "allocate s"), || {
-                Ok(sigs_converted)
-            }
-        ).unwrap();
+        // usually if mult by 1 can do more efficiently
+        // x2 * x = out - x - 5
 
-        let params = &AltJubjubBn256::new();
-
-        let public_generator = params.generator(FixedGenerators::SpendingKeyGenerator).clone();
-
-        let generator = EdwardsPoint::witness(cs.namespace(|| "allocate public generator"), Some(public_generator), params).unwrap();
-
-        let r = EdwardsPoint::witness(cs.namespace(|| "allocate r"), Some(self.sig.unwrap().r), params).unwrap();
-
-        let pk = EdwardsPoint::witness(cs.namespace(|| "allocate pk"), Some(self.public_key.unwrap().0), params).unwrap();
-
-        let signature = EddsaSignature{r, s, pk};
-
-        let value = signature.verify_schnorr_blake2s(
-            cs.namespace(|| "value"),
-            params,
-            &input_bools,
-            generator
-        ).expect("succesfully generated verifying gadget");
+        // mult quadratic constraints
+        //
 
         Ok(())
     }
+}
+
+pub fn proof_write(proof: &mut Proof<Bls12>, proof_encode:&mut Vec<u8>){
+    proof_encode[0..32*2].copy_from_slice(proof.a.into_uncompressed().as_ref());
+    proof_encode[32*2..32*6].copy_from_slice(proof.b.into_uncompressed().as_ref());
+    proof_encode[32*6..32*8].copy_from_slice(proof.c.into_uncompressed().as_ref());
+
+    println!("proof : {:?}", proof_encode);
+    println!("proof_encode: {:?}", proof_encode.len());
 }
 
 #[test]
 fn test_cube_proof(){
     // This may not be cryptographically safe, use
     // `OsRng` (for example) in production software.
-    // let mut rng = thread_rng();
+    let mut rng = thread_rng();
 
     println!("Creating parameters...");
 
-    let mut rng = XorShiftRng::from_seed([0x3dbe6259, 0x8d313d76, 0x3237db17, 0xe5bc0654]);
-        let p_g = FixedGenerators::SpendingKeyGenerator;
-        let params = &AltJubjubBn256::new();
-        let sk = PrivateKey::<Bn256>(rng.gen());
-        let vk = PublicKey::from_private(&sk, p_g, params);
-
-        let msg1 = b"Foo bar pad to16"; // 16 bytes
-
-        let mut input: Vec<bool> = vec![];
-
-        for input_byte in msg1.iter() {
-            for bit_i in (0..8).rev() {
-                input.push((input_byte >> bit_i) & 1u8 == 1u8);
-            }
-        }
-
-        let sig1 = sk.sign_schnorr_blake2s(msg1, &mut rng, p_g, params);
-        assert!(vk.verify_schnorr_blake2s(msg1, &sig1, p_g, params));
-
-        let mut sigs_bytes = [0u8; 32];
-        sig1.s.into_repr().write_le(& mut sigs_bytes[..]).expect("get LE bytes of signature S");
-        let mut sigs_repr = <Fr as PrimeField>::Repr::from(0);
-        sigs_repr.read_le(&sigs_bytes[..]).expect("interpret S as field element representation");
-
-        let sigs_converted = Fr::from_repr(sigs_repr).unwrap();
-
     // Create parameters for our circuit
     let params = {
-        let c = EddsaSignatureDemo::<Bn256> {
-            private_key: None,
-            public_key: None,
-            msg: None,
-            sig: None,
+        let c = CubeDemo::<Bls12> {
+            x: None
         };
 
-        generate_random_parameters::<Bn256, _, _>(c, &mut rng).unwrap()
+        generate_random_parameters::<Bls12, _, _>(c, &mut rng).unwrap()
     };
 
     // Prepare the verification key (for proof verification)
@@ -166,16 +146,13 @@ fn test_cube_proof(){
     // println!("ic0{:?}", params.vk.ic[0].to_compressed());
     // println!("ic1{:?}", params.vk.ic[1].to_compressed());
 
-    println!(r#"{{"alpha_1":{:?},"beta_1":{:?},"beta_2":{:?},"gamma_2":{:?},"delta_1":{:?},"delta_2":{:?},"ic":[{:?},{:?}]}}"#, params.vk.alpha_g1.into_compressed(), params.vk.beta_g1.into_compressed(), params.vk.beta_g2.into_compressed(), params.vk.gamma_g2.into_compressed(), params.vk.delta_g1.into_compressed(), params.vk.delta_g2.into_compressed(), params.vk.ic[0].into_compressed(), params.vk.ic[1].into_compressed());
-
+    // println!(r#"{{"alpha_1":{:?},"beta_1":{:?},"beta_2":{:?},"gamma_2":{:?},"delta_1":{:?},"delta_2":{:?},"ic":[{:?},{:?}]}}"#, params.vk.alpha_g1.into_uncompressed(), params.vk.beta_g1.into_uncompressed(), params.vk.beta_g2.into_uncompressed(), params.vk.gamma_g2.into_uncompressed(), params.vk.delta_g1.into_uncompressed(), params.vk.delta_g2.into_uncompressed(), params.vk.ic[0].into_uncompressed(), params.vk.ic[1].into_uncompressed());
+    
     println!("Creating proofs...");
 
     // Create an instance of circuit
-    let c = EddsaSignatureDemo::<Bn256> {
-        private_key: Some(sk),
-        public_key: Some(vk),
-        msg: Some(msg1.to_vec()),
-        sig: Some(sig1),
+    let c = CubeDemo::<Bls12> {
+        x: PrimeField::from_str("3")
     };
 
     // Create a groth16 proof with our parameters.
@@ -184,8 +161,15 @@ fn test_cube_proof(){
     let mut proof_vec = vec![];
     proof.write(&mut proof_vec).unwrap();
 
+    // println!("proof_vec: {:?}", proof_vec);
+
     let proof_a_affine = proof.a.into_uncompressed();
-    // println!("proofaaffine: {:?}", proof_a_affine)
+    println!("proofaaffine: {:?}", proof_a_affine);
+
+    let test = proof_a_affine.into_affine().unwrap();
+
+    println!("proof: {:?}", proof);
+    println!("test: {:?}", test);
 
     let proof_b_affine = proof.b.into_uncompressed();
     // println!("proofabffine: {:?}", proof_b_affine);
@@ -194,11 +178,12 @@ fn test_cube_proof(){
     // println!("proofacffine: {:?}", proof_c_affine);
 
     println!(r#"{{"pi_a":{:?},"pi_b":{:?},"pi_c":{:?}}}"#, proof_a_affine, proof_b_affine, proof_c_affine);
-
+    let res_proof = format!(r#"{{"pi_a":{:?},"pi_b":{:?},"pi_c":{:?}}}"#, proof_a_affine, proof_b_affine, proof_c_affine);
+    let res_vkey = format!(r#"{{"alpha_1":{:?},"beta_1":{:?},"beta_2":{:?},"gamma_2":{:?},"delta_1":{:?},"delta_2":{:?},"ic":[{:?},{:?}]}}"#, params.vk.alpha_g1.into_uncompressed(), params.vk.beta_g1.into_uncompressed(), params.vk.beta_g2.into_uncompressed(), params.vk.gamma_g2.into_uncompressed(), params.vk.delta_g1.into_uncompressed(), params.vk.delta_g2.into_uncompressed(), params.vk.ic[0].into_uncompressed(), params.vk.ic[1].into_uncompressed());
 
     assert!(verify_proof(
         &pvk,
         &proof,
-        &[]
+        &[PrimeField::from_str("35").unwrap()]
     ).is_ok());
 }
