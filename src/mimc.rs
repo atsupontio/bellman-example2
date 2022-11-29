@@ -162,7 +162,8 @@ fn test_mimc() {
 
     println!("Creating parameters...");
 
-    let xl = Scalar::random(&mut rng);
+    let a = "291159717780246467128751248815521818849";
+    let xl = Scalar::from_str_vartime(a).unwrap();
     let xr = Scalar::random(&mut rng);
     let image = mimc(xl, xr, &constants);
     // let image = PrimeField::from_str_vartime("5").unwrap();
@@ -227,9 +228,9 @@ fn test_mimc() {
         
             // println!(r#"{{"pi_a":{:?},"pi_b":{:?},"pi_c":{:?}}}"#, proof_a_affine, proof_b_affine, proof_c_affine);
             let res_proof = format!(r#"{{"pi_a":{:?},"pi_b":{:?},"pi_c":{:?}}}"#, proof_a_affine, proof_b_affine, proof_c_affine);
-            let res_vkey = format!(r#"{{"alpha_1":{:?},"beta_1":{:?},"beta_2":{:?},"gamma_2":{:?},"delta_1":{:?},"delta_2":{:?},"ic":[{:?},{:?}]}}"#, params.vk.alpha_g1.to_uncompressed(), params.vk.beta_g1.to_uncompressed(), params.vk.beta_g2.to_uncompressed(), params.vk.gamma_g2.to_uncompressed(), params.vk.delta_g1.to_uncompressed(), params.vk.delta_g2.to_uncompressed(), params.vk.ic[0].to_uncompressed(), params.vk.ic[1].to_uncompressed());
-            encode::create_uncompressed_file(res_proof, res_vkey);
-            encode::encode_uncompressed();
+            let res_vkey = format!(r#"{{"alpha_1":{:?},"beta_1":{:?},"beta_2":{:?},"gamma_2":{:?},"delta_1":{:?},"delta_2":{:?},"ic":[{:?}]}}"#, params.vk.alpha_g1.to_uncompressed(), params.vk.beta_g1.to_uncompressed(), params.vk.beta_g2.to_uncompressed(), params.vk.gamma_g2.to_uncompressed(), params.vk.delta_g1.to_uncompressed(), params.vk.delta_g2.to_uncompressed(), params.vk.ic[0].to_uncompressed());
+            // encode::create_uncompressed_file(res_proof, res_vkey);
+            // encode::encode_uncompressed();
 
             proof.write(&mut proof_vec).unwrap();
         }

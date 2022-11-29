@@ -6,8 +6,10 @@ use bls12_381::{Bls12, Scalar};
 use ff::PrimeField as Fr;
 
 mod cube;
-// mod mimc;
+mod mimc;
 mod encode;
+// mod vaccination;
+ mod range_proof;
 
 fn main() {
 //     use bellman::groth16::{
