@@ -24,11 +24,11 @@ use crate::encode;
 // proving that I know x such that x^3 + x + 5 == 35
 // Generalized: x^3 + x + 5 == out
 #[allow(clippy::upper_case_acronyms)]
-pub struct CubeDemo<E: Fr> {
-    pub x: Option<E>,
+pub struct CubeDemo {
+    pub x: Option<u32>,
 }
 
-impl <E: Fr> Circuit<E> for CubeDemo<E> {
+impl <E: Fr> Circuit<E> for CubeDemo {
     fn synthesize<CS: ConstraintSystem<E>>(
         self,
         cs: &mut CS
@@ -43,12 +43,17 @@ impl <E: Fr> Circuit<E> for CubeDemo<E> {
 
         // Allocate the first private "auxiliary" variable
         let x_val = self.x;
+        let mut a = String::new();
+        if let Some(s) = x_val {
+            a = s.to_string();
+        }
+        let new_x_val = E::from_str_vartime(&a);
         let x = cs.alloc(|| "x", || {
-            x_val.ok_or(SynthesisError::AssignmentMissing)
+            new_x_val.ok_or(SynthesisError::AssignmentMissing)
         })?;
 
         // Allocate: x * x = tmp_1
-        let tmp_1_val = x_val.map(|e| {
+        let tmp_1_val = new_x_val.map(|e| {
             e.square()
         });
         let tmp_1 = cs.alloc(|| "tmp_1", || {
@@ -64,7 +69,7 @@ impl <E: Fr> Circuit<E> for CubeDemo<E> {
 
         // Allocate: tmp_1 * x = y
         let x_cubed_val = tmp_1_val.map(|mut e| {
-            e.mul_assign(&x_val.unwrap());
+            e.mul_assign(&new_x_val.unwrap());
             e
         });
         let x_cubed = cs.alloc(|| "x_cubed", || {
@@ -81,7 +86,7 @@ impl <E: Fr> Circuit<E> for CubeDemo<E> {
         // Allocating the public "primary" output uses alloc_input
         let out = cs.alloc_input(|| "out", || {
             let mut tmp = x_cubed_val.unwrap();
-            tmp.add_assign(&x_val.unwrap());
+            tmp.add_assign(&new_x_val.unwrap());
             tmp.add_assign(&E::from_str_vartime("5").unwrap());
             Ok(tmp)
         })?;
@@ -116,7 +121,7 @@ fn test_cube_proof(){
 
     // Create parameters for our circuit
     let params = {
-        let c = CubeDemo::<Scalar> {
+        let c = CubeDemo {
             x: None
         };
 
@@ -140,8 +145,8 @@ fn test_cube_proof(){
     println!("Creating proofs...");
 
     // Create an instance of circuit
-    let c = CubeDemo::<Scalar> {
-        x: Fr::from_str_vartime("3")
+    let c = CubeDemo {
+        x: Some(3),
     };
 
     // Create a groth16 proof with our parameters.
@@ -160,7 +165,7 @@ fn test_cube_proof(){
     let res_proof = format!(r#"{{"pi_a":{:?},"pi_b":{:?},"pi_c":{:?}}}"#, proof_a_affine, proof_b_affine, proof_c_affine);
     let res_vkey = format!(r#"{{"alpha_1":{:?},"beta_1":{:?},"beta_2":{:?},"gamma_2":{:?},"delta_1":{:?},"delta_2":{:?},"ic":[{:?},{:?}]}}"#, params.vk.alpha_g1.to_uncompressed(), params.vk.beta_g1.to_uncompressed(), params.vk.beta_g2.to_uncompressed(), params.vk.gamma_g2.to_uncompressed(), params.vk.delta_g1.to_uncompressed(), params.vk.delta_g2.to_uncompressed(), params.vk.ic[0].to_uncompressed(), params.vk.ic[1].to_uncompressed());
     encode::create_uncompressed_file(res_proof, res_vkey);
-    encode::encode_uncompressed_1input();
+    encode::encode_uncompressed();
 
     assert!(verify_proof(
         &pvk,
@@ -169,59 +174,3 @@ fn test_cube_proof(){
     ).is_ok());
 }
 
-#[test]
-fn test_create_multi_proofs(){
-
-    const BATCH_NUMBER: u32 = 3;
-
-    // This may not be cryptographically safe, use
-    // `OsRng` (for example) in production software.
-    let mut rng = thread_rng();
-
-    println!("Creating parameters...");
-
-    // Create parameters for our circuit
-    let params = {
-        let c = CubeDemo::<Scalar> {
-            x: None
-        };
-
-        generate_random_parameters::<Bls12, _, _>(c, &mut rng).unwrap()
-    };
-
-    // Prepare the verification key (for proof verification)
-    let pvk = prepare_verifying_key(&params.vk);
-
-    println!("Creating proofs...");
-
-    for i in 1..=BATCH_NUMBER {
-        // Create an instance of circuit
-        let c = CubeDemo::<Scalar> {
-            x: Fr::from_str_vartime("3")
-        };
-
-        // Create a groth16 proof with our parameters.
-        let proof = create_random_proof(c, &params, &mut rng).unwrap();
-
-        let proof_a_affine = proof.a.to_uncompressed();
-        // println!("proofaaffine: {:?}", proof_a_affine);
-
-        let proof_b_affine = proof.b.to_uncompressed();
-        // println!("proofabffine: {:?}", proof_b_affine);
-
-        let proof_c_affine = proof.c.to_uncompressed();
-        // println!("proofacffine: {:?}", proof_c_affine);
-
-        // println!(r#"{{"pi_a":{:?},"pi_b":{:?},"pi_c":{:?}}}"#, proof_a_affine, proof_b_affine, proof_c_affine);
-        let res_proof = format!(r#"{{"pi_a":{:?},"pi_b":{:?},"pi_c":{:?}}}"#, proof_a_affine, proof_b_affine, proof_c_affine);
-        let res_vkey = format!(r#"{{"alpha_1":{:?},"beta_1":{:?},"beta_2":{:?},"gamma_2":{:?},"delta_1":{:?},"delta_2":{:?},"ic":[{:?},{:?}]}}"#, params.vk.alpha_g1.to_uncompressed(), params.vk.beta_g1.to_uncompressed(), params.vk.beta_g2.to_uncompressed(), params.vk.gamma_g2.to_uncompressed(), params.vk.delta_g1.to_uncompressed(), params.vk.delta_g2.to_uncompressed(), params.vk.ic[0].to_uncompressed(), params.vk.ic[1].to_uncompressed());
-        encode::create_multi_uncompressed_files(res_proof, res_vkey, i);
-        encode::encode_multi_uncompressed(i, BATCH_NUMBER);
-
-        assert!(verify_proof(
-            &pvk,
-            &proof,
-            &[Fr::from_str_vartime("35").unwrap()]
-        ).is_ok());
-    }
-}

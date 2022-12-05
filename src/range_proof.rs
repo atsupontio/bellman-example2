@@ -47,7 +47,7 @@ impl <E: PrimeField + ff::PrimeFieldBits> Circuit<E> for RangeProof<E> {
         )?;
 
         let rhs_value = self.rhs;
-        let rhs = cs.alloc(
+        let rhs = cs.alloc_input(
             || "B",
             || rhs_value.ok_or(SynthesisError::AssignmentMissing),
         )?;
@@ -243,10 +243,12 @@ fn test_cube_proof(){
 
     println!("Creating proofs...");
 
+    let rhs = PrimeField::from_str_vartime("34");
+
     // Create an instance of circuit
     let c = RangeProof::<Scalar> {
         lhs: PrimeField::from_str_vartime("3"),
-        rhs: PrimeField::from_str_vartime("34"),
+        rhs: rhs,
         n: n,
     };
 
@@ -258,6 +260,6 @@ fn test_cube_proof(){
     assert!(verify_proof(
         &pvk,
         &proof,
-        &[tmp]
+        &[rhs.unwrap() ,tmp]
     ).is_ok());
 }
