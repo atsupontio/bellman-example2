@@ -2,8 +2,8 @@ use ff::PrimeField;
 
 use bellman::{Circuit, ConstraintSystem, SynthesisError};
 
-pub const MIMC_ROUNDS: usize = 322;
-
+// pub const MIMC_ROUNDS: usize = 322;
+pub const MIMC_ROUNDS: usize = 91;
 
 // For randomness (during paramgen and proof generation)
 use rand::thread_rng;
@@ -162,10 +162,12 @@ fn test_mimc() {
 
     println!("Creating parameters...");
 
-    let a = "291159717780246467128751248815521818849";
+    let a = "200";
     let xl = Scalar::from_str_vartime(a).unwrap();
-    let xr = Scalar::random(&mut rng);
+    let xr = Scalar::from_str_vartime("500").unwrap();
+    // let xr = Scalar::random(&mut rng);
     let image = mimc(xl, xr, &constants);
+    println!("hashed number: {:?}", image);
     // let image = PrimeField::from_str_vartime("5").unwrap();
 
     // Create parameters for our circuit

@@ -9,7 +9,7 @@ mod cube;
 mod mimc;
 mod encode;
 // mod vaccination;
- mod range_proof;
+mod range_proof2;
 
 fn main() {
 //     use bellman::groth16::{

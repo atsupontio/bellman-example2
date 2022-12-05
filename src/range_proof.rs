@@ -1,6 +1,6 @@
 #![allow(unused_imports)]
 #![allow(unused_variables)]
-use bellman::gadgets::num;
+use bellman::gadgets::{num, boolean};
 use bls12_381::{Bls12, Scalar};
 // For randomness (during paramgen and proof generation)
 use rand::{thread_rng, Rng};
@@ -25,11 +25,11 @@ use crate::encode;
 // proving that I know x such that x^3 + x + 5 == 35
 // Generalized: x^3 + x + 5 == out
 #[allow(clippy::upper_case_acronyms)]
-pub struct CubeDemo<E: Fr> {
-    pub x: Option<E>,
+pub struct CubeDemo<> {
+    pub x: Vec<Option<bool>>,
 }
 
-impl <E: Fr> Circuit<E> for CubeDemo<E> {
+impl <E: Fr + ff::PrimeFieldBits> Circuit<E> for CubeDemo<> {
     fn synthesize<CS: ConstraintSystem<E>>(
         self,
         cs: &mut CS
@@ -42,30 +42,99 @@ impl <E: Fr> Circuit<E> for CubeDemo<E> {
         // tmp_2 + 5 = out
         // Resulting R1CS with w = [one, x, tmp_1, y, tmp_2, out]
 
-        // Allocate the first private "auxiliary" variable
-        let x_val = self.x;
-        let x = cs.alloc(|| "x", || {
-            x_val.ok_or(SynthesisError::AssignmentMissing)
-        })?;
+        let mut x_bits = Vec::<boolean::Boolean>::with_capacity(4);
+        // allocate bits for use of sha256 
+        for i in 0..4 {
+            let bit = boolean::Boolean::from(boolean::AllocatedBit::alloc(
+                cs.namespace(|| format!("allocating blinding bit {}", i)),
+                self.x[i]
+                )?
+            );
+            x_bits.push(bit);
+        }
 
-        let goal_val = Fr::from_str_vartime("2");
+        let mut goal: Vec<Option<bool>> = Vec::new();
+        // 2 = 0010
+        goal.push(Some(false));
+        goal.push(Some(false));
+        goal.push(Some(true));
+        goal.push(Some(false));
 
-        let ans_val = x_val.map(|mut e| {
-            e.sub_assign(&goal_val.unwrap());
-            e
-        });
-        let ans = cs.alloc(|| "ans", || {
-            ans_val.ok_or(SynthesisError::AssignmentMissing)
-        })?;
+        let mut goal_bits = Vec::<boolean::Boolean>::with_capacity(4);
+        // allocate bits for use of sha256 
+        for i in 0..4 {
+            let bit = boolean::Boolean::from(boolean::AllocatedBit::alloc(
+                cs.namespace(|| format!("allocating blinding bit {}", i)),
+                goal[i]
+                )?
+            );
+            goal_bits.push(bit);
+        }
 
-        // Enforce: x - goal = tmp_1
-        cs.enforce(
-            || "tmp_1",
-            |lc| lc + x - (E::from_str_vartime("2").unwrap(), CS::one()),
-            |lc| lc + CS::one(),
-            |lc| lc + ans
-        );
+        let mut coeff = E::one();
+        let mut x_lc = num::Num::<E>::zero();
+        for bit in x_bits.iter() {
+            x_lc = x_lc.add_bool_with_coeff(CS::one(), bit, coeff);
+            coeff = coeff.double();
+        }
 
+        // allocate some number that should be equal to this combination
+        let value = num::AllocatedNum::alloc(
+            cs.namespace(|| "current value"), 
+            || {
+                let value = x_lc.get_value();
+
+                Ok(value.unwrap())
+            }
+        )?;
+
+        let mut coeff = E::one();
+        let mut goal_lc = num::Num::<E>::zero();
+        for bit in goal_bits.iter() {
+            goal_lc = goal_lc.add_bool_with_coeff(CS::one(), bit, coeff);
+            coeff = coeff.double();
+        }
+
+        // allocate some number that should be equal to this combination
+        let goal_value = num::AllocatedNum::alloc(
+            cs.namespace(|| "current value"), 
+            || {
+                let value = goal_lc.get_value();
+
+                Ok(value.unwrap())
+            }
+        )?;
+
+        let new_x = value.get_value();
+        let new_goal = goal_value.get_value();
+        new_x.unwrap().sub_assign(new_goal.unwrap());
+
+
+        let ans_value = num::AllocatedNum::alloc(
+            cs.namespace(|| "answer value"),
+            || {
+                let value = new_x;
+                Ok(value.unwrap())
+            }
+        )?;
+
+        let ans_bits = ans_value.to_bits_le(
+            cs.namespace(|| "get answer value bits")
+        )?;
+
+        let a = ans_bits[0].get_value().unwrap();
+
+        if !a {
+            // Enforce: x - goal = tmp_1
+            cs.enforce(
+                || "tmp_1",
+                |lc| lc + value.get_variable() - goal_value.get_variable(),
+                |lc| lc + CS::one(),
+                |lc| lc + ans_value.get_variable()
+            );
+        } else {
+            return Err(SynthesisError::AssignmentMissing)
+        }
        
         Ok(())
     }
@@ -82,7 +151,7 @@ fn test_cube_proof(){
     // Create parameters for our circuit
     let params = {
         let c = CubeDemo::<> {
-            x: None, 
+            x: vec![None; 4], 
         };
 
         generate_random_parameters::<Bls12, _, _>(c, &mut rng).unwrap()
@@ -94,9 +163,16 @@ fn test_cube_proof(){
 
     println!("Creating proofs...");
 
+    let mut a: Vec<Option<bool>> = Vec::new();
+    // 4 = 0100
+    a.push(Some(false));
+    a.push(Some(true));
+    a.push(Some(false));
+    a.push(Some(false));
+
     // Create an instance of circuit
-    let c = CubeDemo::<Scalar> {
-        x: Fr::from_str_vartime("3"),
+    let c = CubeDemo::<> {
+        x: a,
     };
 
     // Create a groth16 proof with our parameters.
