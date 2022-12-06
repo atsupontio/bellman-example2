@@ -10,7 +10,7 @@ use ff::PrimeField as Fr;
 // mod cube; 
 mod encode;
 mod cid_mimc;
-mod range_proof;
+// mod range_proof;
 // mod vaccination_bit;
 // mod encode_bit;
 

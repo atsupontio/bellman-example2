@@ -366,11 +366,6 @@ fn test_cube_proof(){
 
     println!("Creating parameters...");
 
-    let xl_str = "291159717780246467128751248815521818849185286175227135210";
-    let xr_str = "15521818849185286175227135210";
-    let xl = Scalar::from_str_vartime(xl_str).unwrap();
-    let xr = Scalar::from_str_vartime(xr_str).unwrap();
-
     // let user_id = 291159717780246467128751248815521818849;
     // let secret = 185286;
     // let nonce = 175227135210;
@@ -379,13 +374,19 @@ fn test_cube_proof(){
     let nonce = ff::PrimeField::from_str_vartime("175227135210").unwrap();
     let name = ff::PrimeField::from_str_vartime("107111121971099797116115117107105").unwrap();
     let birth = ff::PrimeField::from_str_vartime("320516").unwrap();
+
     let name_and_birth = mimc(name, birth, &constants);
-    println!("hashed name and birth: {:?}", name_and_birth);
+    let name_and_birth_repr = name_and_birth.to_repr();
+    // println!("hashed name and birth: {:?}", name_and_birth);
+    let res_name_and_birth = format!("{}{}", "0x", encode::encode_hex(&name_and_birth_repr));
+    println!("repr_name_and_birth_hex: {:?}", res_name_and_birth);
+
     let image1 = mimc(id, secret, &constants);
     let image2 = mimc(image1, name_and_birth, &constants);
     let image3 = mimc(image2, nonce, &constants);
-    // let image2 = ff::PrimeField::from_str_vartime("123").unwrap();
-    println!("image: {:?}", image3);
+    let image3_repr = image3.to_repr();
+    let res_image3 = format!("{}{}", "0x", encode::encode_hex(&image3_repr));
+    println!("repr_image_hex: {:?}", res_image3);
 
     // Create parameters for our circuit
      // Create parameters for our circuit
